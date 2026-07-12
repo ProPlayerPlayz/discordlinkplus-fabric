@@ -4,7 +4,7 @@ plugins {
 }
 
 group = property("group") as String
-version = property("pluginVersion") as String
+version = (findProperty("releaseVersion") as String?) ?: (property("pluginVersion") as String)
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))

@@ -42,33 +42,20 @@ Output: `build/libs/DiscordLinkPlus-1.0.2.jar`
 
 The **Build** workflow (`.github/workflows/build.yml`) runs on pushes and PRs to `main`/`master`, compiles the plugin, and uploads the JAR as a workflow artifact.
 
-On push to `main`, if git tag `v<version>` does not exist yet for the current `pluginVersion`, the workflow also:
-
-1. Creates git tag `v<version>` and a GitHub Release
-2. Publishes the JAR to Modrinth (`discordlink+`)
+The **Release** workflow (`.github/workflows/release.yml`) publishes to Modrinth, uploads the JAR to the GitHub Release, and notifies Discord when you publish a GitHub Release (or run the workflow manually).
 
 #### One-time setup
 
-1. Create a Modrinth project for this plugin
-2. Generate a [Modrinth PAT](https://modrinth.com/settings/pats) with **Create versions** scope
-3. Add GitHub repository secret **`MODRINTH_TOKEN`**
-
-The Modrinth project ID is resolved automatically from the project slug at publish time.
+1. Generate a [Modrinth PAT](https://modrinth.com/settings/pats) with **Create versions** scope
+2. Add GitHub repository secret **`MODRINTH_TOKEN`**
+3. (Optional) Add **`DISCORD_WEBHOOK_URL`** for release announcements
 
 #### Cutting a release
 
-1. Bump the version in `gradle.properties`:
-   ```properties
-   pluginVersion=1.0.1
-   ```
-2. Commit and push to `main`:
-   ```bash
-   git add gradle.properties
-   git commit -m "Release 1.0.1"
-   git push origin main
-   ```
+1. Bump the version in `gradle.properties` and push to `main`
+2. Create a GitHub Release with tag `v<version>` (e.g. `v1.0.2`) — the Release workflow builds, publishes to Modrinth, attaches the JAR, and pings Discord
 
-To **re-publish without bumping the version** (e.g. after fixing CI), go to **Actions → Build → Run workflow** and run (Publish is checked by default). If the git tag already exists, the GitHub release step is skipped, but Modrinth publish still runs.
+Or run **Actions → Release → Run workflow** with a version (and optional changelog) to publish without creating a GitHub Release first.
 
 ## Setup
 
