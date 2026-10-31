@@ -103,7 +103,8 @@ git clone --branch fabric-26.3-voice DiscordLinkPlus-Voice-Fabric-26.3.git.bundl
 cd discordlinkplus-fabric
 git remote rename origin bundle
 git remote add upstream https://github.com/codingsushi79/discordlinkplus.git
+git remote add origin https://github.com/k1R4/discordlinkplus-fabric.git
 git fetch upstream
 ```
 
-To publish your fork later, add its URL as `origin` and push the Fabric branch and the `fabric-*` tags explicitly. The prepared clone has only the read-source `upstream` remote configured; no fork has been published.
+The published fork is [k1R4/discordlinkplus-fabric](https://github.com/k1R4/discordlinkplus-fabric), on branch `fabric-26.3-voice`. The working clone uses this fork as `origin` and the original repository as `upstream`. Push the Fabric branch and `fabric-*` tags explicitly; the fork's `main` branch is preserved for upstream history. All port commits include `Co-authored-by: Codex <noreply@openai.com>`.
