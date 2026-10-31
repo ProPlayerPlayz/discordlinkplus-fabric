@@ -16,6 +16,7 @@ public final class BridgeConfig {
     public boolean bridgePasswordGroups = false;
     public boolean deleteEmptyGroupChannels = true;
     public List<String> botTokens = new ArrayList<>(List.of("PASTE_BOT_TOKEN_HERE"));
+    public ChatConfig chat = new ChatConfig();
 
     public static BridgeConfig load(Path path) throws IOException {
         if (!Files.exists(path)) {
@@ -36,13 +37,15 @@ public final class BridgeConfig {
     }
 
     public void validate() {
-        if (!enabled) return;
+        if (chat == null) chat = new ChatConfig();
+        chat.validate();
+        if (!enabled && !chat.enabled) return;
         requireId(guildId, "guildId");
-        requireId(groupCategoryId, "groupCategoryId");
+        if (enabled) requireId(groupCategoryId, "groupCategoryId");
         if (tokens().isEmpty()) throw new IllegalArgumentException("Add at least one bot token");
     }
 
-    private static void requireId(String value, String field) {
+    static void requireId(String value, String field) {
         if (value == null || !value.matches("[1-9][0-9]{15,19}")) throw new IllegalArgumentException("Invalid " + field);
         Long.parseUnsignedLong(value);
     }
