@@ -1,12 +1,4 @@
 pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
+    repositories { maven("https://maven.fabricmc.net/"); gradlePluginPortal(); mavenCentral() }
 }
-
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
-}
-
-rootProject.name = "discordlinkplus"
+rootProject.name = "discordlinkplus-voice-fabric"
