@@ -11,7 +11,9 @@ final class ChatEvents {
     static void register() {
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, bound) -> {
             ChatRelay relay = relay();
-            if (relay == null || !bound.chatType().is(ChatType.CHAT) || message.isFullyFiltered()) return;
+            if (relay == null) return;
+            relay.minecraftEvent();
+            if (!bound.chatType().is(ChatType.CHAT) || message.isFullyFiltered()) return;
             String text = message.filterMask().isEmpty() ? message.decoratedContent().getString() : message.filterMask().apply(message.signedContent());
             var profile = sender.getGameProfile();
             // Skin Restorer replaces this profile when a skin changes. Resolve it per message,

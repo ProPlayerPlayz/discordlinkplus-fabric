@@ -15,7 +15,7 @@ final class ChatRelay {
     private final ArrayDeque<Outgoing> outgoing = new ArrayDeque<>();
     private final ArrayDeque<Incoming> incoming = new ArrayDeque<>();
     private boolean closed;
-    private long dropped, sent, received, errors;
+    private long dropped, sent, received, errors, minecraftEvents;
 
     ChatRelay(String guildId, ChatConfig config) { this(guildId, config, System::nanoTime); }
     ChatRelay(String guildId, ChatConfig config, LongSupplier clock) { this.guildId = guildId; this.config = config; this.clock = clock; }
@@ -72,9 +72,10 @@ final class ChatRelay {
     }
 
     synchronized void sent() { sent++; }
+    synchronized void minecraftEvent() { minecraftEvents++; }
     synchronized void received() { received++; }
     synchronized void failed() { errors++; }
-    synchronized String metrics() { return "MC→Discord=" + sent + ", Discord→MC=" + received + ", queued=" + outgoing.size() + "/" + incoming.size() + ", dropped=" + dropped + ", errors=" + errors; }
+    synchronized String metrics() { return "MC→Discord=" + sent + ", Discord→MC=" + received + ", queued=" + outgoing.size() + "/" + incoming.size() + ", dropped=" + dropped + ", errors=" + errors + ", MC chat events=" + minecraftEvents; }
     synchronized void close() { closed = true; outgoing.clear(); incoming.clear(); }
     record Outgoing(String player, String avatar, String webhookText, String botText, boolean system, long created) {}
     record Incoming(String text, long created) {}

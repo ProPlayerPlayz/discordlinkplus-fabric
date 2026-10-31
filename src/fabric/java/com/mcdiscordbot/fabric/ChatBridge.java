@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Reuses the first voice-pool bot; every Discord REST operation runs on this worker. */
 final class ChatBridge extends ListenerAdapter implements AutoCloseable {
+    static final String WEBHOOK_NAME = "MC Link Chat";
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("DiscordLinkPlusChat");
     private final BridgeConfig config;
     private final ChatRelay relay;
@@ -26,17 +27,30 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
     private Webhook webhook;
     private boolean checkedWebhook;
     private long lastWarning;
+    private volatile String webhookFailure = "", deliveryFailure = "";
+    private final java.util.concurrent.atomic.AtomicLong discordEvents = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong channelMessages = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong ignoredBotMessages = new java.util.concurrent.atomic.AtomicLong();
 
     ChatBridge(BridgeConfig config) { this.config = config; relay = new ChatRelay(config.guildId, config.chat); }
     void start() { if (config.chat.enabled) worker.scheduleWithFixedDelay(this::work, 100, 100, TimeUnit.MILLISECONDS); }
     void bind(JDA firstBot) { if (!closed) client = firstBot; }
     ChatRelay relay() { return relay; }
-    String status() { return config.chat.enabled ? "Text chat: " + state + "; " + relay.metrics() : "Text chat disabled."; }
+    String status() {
+        if (!config.chat.enabled) return "Text chat disabled.";
+        return "Text chat: " + state + "; " + relay.metrics()
+            + "\nChat channel: " + config.chat.channelId + "; directions MC→Discord=" + config.chat.minecraftToDiscord + ", Discord→MC=" + config.chat.discordToMinecraft
+            + "; Discord events=" + discordEvents.get() + ", channel matches=" + channelMessages.get() + ", ignored bots/webhooks=" + ignoredBotMessages.get()
+            + (webhookFailure.isEmpty() ? "" : "\nWebhook setup: " + webhookFailure)
+            + (deliveryFailure.isEmpty() ? "" : "\nLast chat delivery failure: " + deliveryFailure);
+    }
 
     @Override public void onMessageReceived(MessageReceivedEvent event) {
         if (closed || !config.chat.enabled || !config.chat.discordToMinecraft || !event.isFromGuild()) return;
+        discordEvents.incrementAndGet();
         if (!config.guildId.equals(event.getGuild().getId()) || !config.chat.channelId.equals(event.getChannel().getId())) return;
-        if (event.getAuthor().isBot() || event.getMessage().isWebhookMessage()) return;
+        channelMessages.incrementAndGet();
+        if (event.getAuthor().isBot() || event.getMessage().isWebhookMessage()) { ignoredBotMessages.incrementAndGet(); return; }
         String name = event.getMember() == null ? event.getAuthor().getName() : event.getMember().getEffectiveName();
         StringBuilder text = new StringBuilder(event.getMessage().getContentDisplay());
         event.getMessage().getAttachments().stream().limit(5).forEach(attachment -> text.append(" [Attachment] ").append(attachment.getUrl()));
@@ -52,36 +66,39 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
             TextChannel channel = guild == null ? null : guild.getTextChannelById(config.chat.channelId);
             if (channel == null) { state = "configured text channel missing or inaccessible"; return; }
             if (config.chat.useWebhooks && config.chat.minecraftToDiscord && !checkedWebhook) setupWebhook(channel, current);
-            state = config.chat.useWebhooks && config.chat.minecraftToDiscord ? (webhook == null ? "connected (bot-message fallback; check Manage Webhooks and reload)" : "connected (player webhooks)") : "connected (bot messages)";
+            state = config.chat.useWebhooks && config.chat.minecraftToDiscord ? (webhook == null ? "connected (bot-message fallback)" : "connected (player webhooks)") : "connected (bot messages)";
             ChatRelay.Outgoing message = relay.nextOutgoing();
             if (message == null) return;
             try {
-                if (!message.system() && webhook != null) {
+                if (!message.system() && webhook != null && validWebhookName(message.player())) {
                     await(webhook.sendMessage(message.webhookText()).setUsername(message.player()).setAvatarUrl(message.avatar())
                         .setAllowedMentions(List.of()).setSuppressEmbeds(true));
                 } else {
                     await(channel.sendMessage(message.botText()).setAllowedMentions(List.of()).setSuppressEmbeds(true));
                 }
                 relay.sent();
+                deliveryFailure = "";
             } catch (Exception e) {
                 // A timed-out request may already have been delivered. Do not retry the same message and duplicate it.
                 relay.failed();
+                deliveryFailure = ChatFailure.describe(e);
                 if (!message.system() && webhook != null) webhook = null;
-                warn(e);
+                warn("message delivery", e);
             }
-        } catch (Exception e) { relay.failed(); warn(e); }
+        } catch (Exception e) { relay.failed(); deliveryFailure = ChatFailure.describe(e); warn("worker", e); }
     }
 
     private void setupWebhook(TextChannel channel, JDA current) throws InterruptedException {
         checkedWebhook = true;
         try {
             webhook = await(channel.retrieveWebhooks()).stream()
-                .filter(w -> w.getType() == WebhookType.INCOMING && "DiscordLink+ Chat".equals(w.getName())
+                .filter(w -> w.getType() == WebhookType.INCOMING && WEBHOOK_NAME.equals(w.getName())
                     && w.getOwnerAsUser() != null && current.getSelfUser().getId().equals(w.getOwnerAsUser().getId()))
                 .findFirst().orElse(null);
-            if (webhook == null) webhook = await(channel.createWebhook("DiscordLink+ Chat"));
+            if (webhook == null) webhook = await(channel.createWebhook(WEBHOOK_NAME));
+            webhookFailure = "";
         } catch (InterruptedException e) { throw e; }
-        catch (Exception e) { webhook = null; warn(e); }
+        catch (Exception e) { webhook = null; webhookFailure = ChatFailure.describe(e); warn("webhook setup", e); }
     }
 
     private static <T> T await(RestAction<T> action) throws Exception {
@@ -90,12 +107,18 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
         catch (Exception e) { future.cancel(false); throw e; }
     }
 
-    private void warn(Exception error) {
+    static boolean validWebhookName(String name) {
+        if (name == null || name.isBlank() || name.length() > 80) return false;
+        String normalized = name.toLowerCase(java.util.Locale.ROOT);
+        return !normalized.contains("discord") && !normalized.contains("clyde");
+    }
+
+    private void warn(String operation, Exception error) {
         if (error instanceof InterruptedException) { Thread.currentThread().interrupt(); return; }
         long now = System.nanoTime();
         if (now - lastWarning < 30_000_000_000L && lastWarning != 0) return;
         lastWarning = now;
-        LOG.warn("Text relay request failed ({}). Check /discordlink status, channel permissions and config. Message content and credentials are not logged.", error.getClass().getSimpleName());
+        LOG.warn("Text relay {} failed: {}. Check /discordlink status. Message content and credentials are not logged.", operation, ChatFailure.describe(error));
     }
 
     @Override public void close() { closed = true; relay.close(); worker.shutdownNow(); client = null; }

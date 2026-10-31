@@ -61,13 +61,37 @@ class ChatBridgeTest {
             bridge.onMessageReceived(network.event(false, false, "/op Player"));
             assertEquals("[Discord] Friend: /op Player", bridge.relay().nextIncoming().text());
             assertNull(bridge.relay().nextOutgoing());
+            assertTrue(bridge.status().contains("Discord events=3, channel matches=3, ignored bots/webhooks=2"));
+        }
+    }
+
+    @Test void aNewWebhookUsesAnApiAllowedNameAndDeliversTheFirstMessage() {
+        var network = new Network(false, false);
+        try (var bridge = new ChatBridge(config())) {
+            bridge.bind(network.client);
+            bridge.relay().minecraft(UUID.randomUUID(), "Player", null, "first message");
+            bridge.work();
+            assertEquals("MC Link Chat", network.createdWebhookName);
+            assertEquals(List.of("first message"), network.webhookMessages);
+            assertTrue(bridge.status().contains("player webhooks"));
+        }
+    }
+
+    @Test void reservedPlayerNamesUseBotFallbackWithoutLosingThePlayerName() {
+        var network = new Network(false);
+        try (var bridge = new ChatBridge(config())) {
+            bridge.bind(network.client);
+            bridge.relay().minecraft(UUID.randomUUID(), "ClydePlayer", null, "hello");
+            bridge.work();
+            assertEquals(List.of("**ClydePlayer**: hello"), network.botMessages);
+            assertTrue(network.webhookMessages.isEmpty());
         }
     }
 
     private static final class Network {
         final List<String> botMessages = new ArrayList<>(), webhookMessages = new ArrayList<>();
         Object mentions;
-        String username, avatar;
+        String username, avatar, createdWebhookName;
         final SelfUser self = stub(SelfUser.class, (name, args) -> name.equals("getId") ? "bot" : null);
         final Webhook webhook;
         final TextChannel channel;
@@ -75,9 +99,13 @@ class ChatBridgeTest {
         final JDA client;
 
         Network(boolean failWebhookSetup) {
+            this(failWebhookSetup, true);
+        }
+
+        Network(boolean failWebhookSetup, boolean existingWebhook) {
             webhook = stub(Webhook.class, (name, args) -> switch (name) {
                 case "getType" -> WebhookType.INCOMING;
-                case "getName" -> "DiscordLink+ Chat";
+                case "getName" -> "MC Link Chat";
                 case "getOwnerAsUser" -> self;
                 case "sendMessage" -> { webhookMessages.add(args[0].toString()); yield sendAction(WebhookMessageCreateAction.class); }
                 default -> null;
@@ -88,7 +116,15 @@ class ChatBridgeTest {
                 case "getGuild" -> this.guild;
                 case "retrieveWebhooks" -> {
                     if (failWebhookSetup) throw new IllegalStateException("permission denied");
-                    yield stub(RestAction.class, (method, ignored) -> method.equals("submit") ? CompletableFuture.completedFuture(List.of(webhook)) : null);
+                    yield stub(RestAction.class, (method, ignored) -> method.equals("submit") ? CompletableFuture.completedFuture(existingWebhook ? List.of(webhook) : List.of()) : null);
+                }
+                case "createWebhook" -> {
+                    String supplied = args[0].toString();
+                    if (supplied.toLowerCase(Locale.ROOT).contains("discord") || supplied.toLowerCase(Locale.ROOT).contains("clyde"))
+                        throw new IllegalArgumentException("Reserved webhook name");
+                    createdWebhookName = supplied;
+                    yield stub(net.dv8tion.jda.api.requests.restaction.WebhookAction.class,
+                        (method, ignored) -> method.equals("submit") ? CompletableFuture.completedFuture(webhook) : null);
                 }
                 case "sendMessage" -> { botMessages.add(args[0].toString()); yield sendAction(MessageCreateAction.class); }
                 default -> null;

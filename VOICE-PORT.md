@@ -32,7 +32,7 @@ Minecraft **26.3**, Java **25**, Fabric Loader **0.19.5+**, Fabric API, and Simp
 ## Install and configure
 
 1. Stop the Minecraft server and back up any existing voice bridge configuration.
-2. Put `DiscordLinkPlus-Voice-1.1.0-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Disable the old JAR when updating; only one version should be enabled.
+2. Put `DiscordLinkPlus-Voice-1.1.1-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Disable the old JAR when updating; only one version should be enabled.
 3. Copy the provided `discordlinkplus-voice.json` to `config/discordlinkplus-voice.json`, or start once to generate a disabled template.
 4. Enter `guildId`, `groupCategoryId`, and the token in `botTokens`. Change `enabled` to `true` when ready. Keep tokens private and out of source control/logs. Every bot in the list must be invited to the same server and have the category permissions above.
 5. Start the server, or run `/discordvoice reload` after a configuration change. `/discordvoice status` shows bot gateway/voice state, waiting rooms, and audio frame/error counts. These commands require operator level 3 (admin) or the server console.
@@ -59,3 +59,5 @@ This integration is pinned to Minecraft 26.3 and SVC 2.6.27 because it uses thei
 Validation: 17 unit tests pass, including signed/unlisted player-info packet codec round-trip and speech/silence hold behavior. Packaged Fabric server startup and native Opus conversion tests pass. On the existing unmodified Minecraft/SVC client, the Discord head loaded, its outline activated with a local silent audio packet stream, and the outline cleared after the stream stopped. The visual probe used a disposable loopback test world and sent no audio into Discord.
 
 Version 1.1.0: 31 automated tests pass. The packaged JAR passed local offline server startup with Skin Restorer 2.11.0, live skin-property changes through its actual skin service, public/private/filtered message handling, join broadcasts, literal inbound delivery without echo, and the native SVC audio probe. Discord API behavior was exercised with in-memory JDA interfaces; no real Discord chat round trip or Axolotl deployment was performed for this release. See CHAT-SETUP.md for manual installation.
+
+Version 1.1.1 fixes the reserved webhook name, adds new-webhook regression coverage and sanitized async failure diagnostics, and exposes input-event counts in status. All 35 automated tests pass. The user confirmed the text relay itself works on the installed 1.1.0 build; the 1.1.1 patch is supplied for manual installation.
