@@ -74,7 +74,7 @@ public final class VoiceEngine implements AutoCloseable {
     private String key(VoicechatConnection connection) {
         if (connection == null || !connection.isConnected() || connection.isDisabled()) return null;
         Group group = connection.getGroup();
-        return Routing.room(group == null ? null : group.getId(), group != null && group.hasPassword(), config.bridgePasswordGroups);
+        return Routing.room(group == null ? null : group.getId(), group != null && group.hasPassword(), group != null && group.getType() == Group.Type.ISOLATED, config.bridgePasswordGroups);
     }
 
     private void boot() {
@@ -147,10 +147,10 @@ public final class VoiceEngine implements AutoCloseable {
             Room room = rooms.get(key);
             if (!desired.containsKey(key) || (room.bot != null && (room.bot.client.getStatus() == JDA.Status.SHUTDOWN || room.bot.guild() == null))) release(key);
         }
-        if (config.deleteEmptyGroupChannels) {
-            for (String key : new ArrayList<>(owned.keySet())) {
-                if (!desired.containsKey(key)) deleteOwned(guild, key);
-            }
+        for (String key : new ArrayList<>(owned.keySet())) {
+            Group group = api.getGroup(UUID.fromString(key));
+            boolean isolated = group != null && group.getType() == Group.Type.ISOLATED;
+            if (!desired.containsKey(key) && (config.deleteEmptyGroupChannels || isolated)) deleteOwned(guild, key);
         }
         if (closed) return;
 
@@ -166,10 +166,14 @@ public final class VoiceEngine implements AutoCloseable {
                     owned.remove(key); saveOwned(); channel = null;
                 }
                 if (channel == null) {
-                    String name = channelName(config.groupChannelPrefix, entry.getValue(), key);
+                    String name = channelName(entry.getValue());
                     channel = guild.getCategoryById(config.groupCategoryId).createVoiceChannel(name).submit().get(10, TimeUnit.SECONDS);
                     owned.put(key, new OwnedChannel(channel.getId(), config.groupCategoryId));
                     saveOwned();
+                }
+                String expectedName = channelName(entry.getValue());
+                if (!channel.getName().equals(expectedName)) {
+                    channel.getManager().setName(expectedName).submit().get(10, TimeUnit.SECONDS);
                 }
             }
             if (closed) return;
@@ -178,6 +182,7 @@ public final class VoiceEngine implements AutoCloseable {
                 room = new Room(key, entry.getValue(), channel.getId());
                 rooms.put(key, room);
             }
+            room.name = entry.getValue();
             if (room.bot == null) {
                 Bot available = bots.stream().filter(b -> b.room == null && b.guild() != null && b.client.getStatus() == JDA.Status.CONNECTED).findFirst().orElse(null);
                 if (available != null) attach(room, available);
@@ -255,10 +260,10 @@ public final class VoiceEngine implements AutoCloseable {
         catch (java.nio.file.AtomicMoveNotSupportedException e) { Files.move(temp, stateFile, StandardCopyOption.REPLACE_EXISTING); }
     }
 
-    static String channelName(String prefix, String name, String id) {
-        String base = (prefix + name.replaceAll("[\\p{Cntrl}]", " ")).strip();
-        if (base.length() > 88) base = base.substring(0, 88);
-        return base + " · " + id.substring(0, 8);
+    static String channelName(String name) {
+        String base = name.replaceAll("[\\p{Cntrl}]", " ").strip();
+        if (base.isEmpty()) base = "Voice group";
+        return base.length() > 100 ? base.substring(0, 100) : base;
     }
 
     @Override public void close() {
@@ -280,7 +285,7 @@ public final class VoiceEngine implements AutoCloseable {
 
     private static final class Room {
         final String key;
-        final String name;
+        String name;
         final String channelId;
         Bot bot;
         RoomAudio audio;

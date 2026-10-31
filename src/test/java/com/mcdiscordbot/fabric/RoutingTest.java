@@ -5,22 +5,31 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RoutingTest {
-    @Test void ungroupedPlayersNeverBridge() { assertNull(Routing.room(null, false, false)); }
+    @Test void ungroupedPlayersNeverBridge() { assertNull(Routing.room(null, false, false, false)); }
     @Test void separateGroupsStaySeparate() {
         UUID first = UUID.randomUUID(), second = UUID.randomUUID();
-        assertEquals(first.toString(), Routing.room(first, false, false));
-        assertNotEquals(Routing.room(first, false, false), Routing.room(second, false, false));
+        assertEquals(first.toString(), Routing.room(first, false, false, false));
+        assertNotEquals(Routing.room(first, false, false, false), Routing.room(second, false, false, false));
     }
     @Test void privateGroupNeedsExplicitOptIn() {
         UUID group = UUID.randomUUID();
-        assertNull(Routing.room(group, true, false));
-        assertEquals(group.toString(), Routing.room(group, true, true));
+        assertNull(Routing.room(group, true, false, false));
+        assertEquals(group.toString(), Routing.room(group, true, false, true));
     }
-    @Test void distinctUuidSuffixAvoidsSameNameGroupCollision() {
-        String a = VoiceEngine.channelName("MC · ", "Same name", "12345678-0000-0000-0000-000000000000");
-        String b = VoiceEngine.channelName("MC · ", "Same name", "87654321-0000-0000-0000-000000000000");
-        assertNotEquals(a, b);
-        assertTrue(VoiceEngine.channelName("MC · ", "a".repeat(200), UUID.randomUUID().toString()).length() <= 100);
+    @Test void isolatedGroupsNeverBridgeEvenWhenPrivateGroupsAreEnabled() {
+        UUID group = UUID.randomUUID();
+        assertNull(Routing.room(group, false, true, false));
+        assertNull(Routing.room(group, false, true, true));
+        assertNull(Routing.room(group, true, true, true));
+    }
+    @Test void channelUsesExactGroupNameWithoutPrefixOrUuid() {
+        assertEquals("aoeu", VoiceEngine.channelName("aoeu"));
+        assertEquals("Same name", VoiceEngine.channelName("Same name"));
+        assertEquals("Friends 🎮", VoiceEngine.channelName("Friends 🎮"));
+    }
+    @Test void channelNameRemainsValidForMalformedInput() {
+        assertEquals("Voice group", VoiceEngine.channelName("\n\t"));
+        assertEquals("a".repeat(100), VoiceEngine.channelName("a".repeat(200)));
     }
     @Test void disabledTemplateDoesNotRequireCredentialsAndEnabledConfigDoes() {
         var config = new BridgeConfig();

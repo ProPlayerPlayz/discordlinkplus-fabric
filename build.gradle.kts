@@ -4,7 +4,7 @@ plugins {
     id("com.gradleup.shadow") version "9.4.2"
 }
 group = "com.mcdiscordbot"
-version = "1.0.0-fabric.26.3"
+version = "1.0.1-fabric.26.3"
 base { archivesName.set("DiscordLinkPlus-Voice") }
 java { toolchain.languageVersion.set(JavaLanguageVersion.of(25)); withSourcesJar() }
 sourceSets {

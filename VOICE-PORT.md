@@ -4,7 +4,8 @@ This is a voice-only port based on [codingsushi79/discordlinkplus](https://githu
 
 ## Behavior
 
-- Each occupied public Simple Voice Chat group gets a temporary Discord voice channel.
+- Each occupied public Simple Voice Chat group of type Normal or Open gets a temporary Discord voice channel, named exactly after the in-game group.
+- Isolated groups never appear on Discord and never bridge audio, even if password-protected group bridging is enabled. An existing managed channel is removed if its group becomes isolated.
 - Discord-only friends can join that channel and talk to the Minecraft group in both directions.
 - Minecraft players use their ordinary SVC clients; they do not need Discord open.
 - Ungrouped players are not bridged. Normal Minecraft proximity/group audio is unchanged.
@@ -29,11 +30,11 @@ Minecraft **26.3**, Java **25**, Fabric Loader **0.19.5+**, Fabric API, and Simp
 ## Install and configure
 
 1. Stop the Minecraft server and back up any existing voice bridge configuration.
-2. Put `DiscordLinkPlus-Voice-1.0.0-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Remove other bridges that would compete for the same bot accounts.
+2. Put `DiscordLinkPlus-Voice-1.0.1-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Disable the old JAR when updating; only one version should be enabled.
 3. Copy the provided `discordlinkplus-voice.json` to `config/discordlinkplus-voice.json`, or start once to generate a disabled template.
 4. Enter `guildId`, `groupCategoryId`, and the token in `botTokens`. Change `enabled` to `true` when ready. Keep tokens private and out of source control/logs. Every bot in the list must be invited to the same server and have the category permissions above.
 5. Start the server, or run `/discordvoice reload` after a configuration change. `/discordvoice status` shows bot gateway/voice state, waiting rooms, and audio frame/error counts. These commands require operator level 3 (admin) or the server console.
-6. Create a public SVC group in Minecraft. A channel named `MC · <group> · <short UUID>` should appear within a few seconds. Join it from Discord, then test speech in both directions. Creating the channel does not by itself prove that audio is connected; check the status command.
+6. Create a public Normal or Open SVC group in Minecraft. A channel with the same name should appear within a few seconds. Join it from Discord, then test speech in both directions. Creating the channel does not by itself prove that audio is connected; check the status command. Groups with identical names remain separate channels, tracked internally by UUID. Existing managed channels are renamed to match their group's current name.
 
 The mod keeps an ownership registry in `config/discordlinkplus-voice-channels.json`. Preserve it across restarts so the mod can reuse/clean up only its own temporary channels. Manually moving a temporary channel out of its recorded category detaches it from automatic management. Avoid reloads while changing voice groups; a reload briefly disconnects the bridge.
 
@@ -41,8 +42,8 @@ The mod keeps an ownership registry in `config/discordlinkplus-voice-channels.js
 
 With JDK 25 selected: `gradlew.bat build` (Windows) or `./gradlew build` (Linux). The installable shaded JAR is in `build/libs/`; do not install the `unbundled` or `sources` JAR.
 
-Validated locally: 11 automated checks (mixing, clipping, stale/overloaded queues, endian conversion, group isolation, private-group routing, config validation); shaded Opus and DAVE native initialization; packaged JAR startup on an isolated Fabric 0.19.5 / Minecraft 26.3 server; SVC native encode/decode and both room audio conversion paths through a disposable test addon.
+Validated locally: 13 automated checks (mixing, clipping, stale/overloaded queues, endian conversion, separate-group routing, isolated-group exclusion, private-group routing, exact channel names, config validation). The initial build also passed shaded Opus and DAVE native initialization, packaged JAR startup on an isolated Fabric 0.19.5 / Minecraft 26.3 server, and SVC native encode/decode and both room audio conversion paths through a disposable test addon.
 
 Also validated with the configured AxolotlVoice bot: real Discord login and DAVE voice connection; automatic channel creation for two SVC test groups; one bot serving the first group while the second waits; reassignment after the first group empties; automatic deletion of both temporary channels. Both test groups used local Carpet dummy players; no test audio was sent to the Discord channels.
 
-Pending: a human two-way call. Linux host native loading and coexistence with the full Axolotl mod set also need deployment verification. This is a custom test build, not an upstream supported release.
+The initial build was deployed on the Linux Axolotl server, with successful bot login. The user confirmed that live audio, channel creation, and channel deletion work. Discord REST also confirmed that the live group channel's parent is the configured Axolotl Forever World category. Version 1.0.1 adds exact names and isolated-group exclusion. This is a custom build, not an upstream supported release.

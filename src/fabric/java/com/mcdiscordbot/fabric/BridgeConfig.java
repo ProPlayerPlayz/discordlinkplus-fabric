@@ -13,7 +13,6 @@ public final class BridgeConfig {
     public boolean enabled = false;
     public String guildId = "";
     public String groupCategoryId = "";
-    public String groupChannelPrefix = "MC · ";
     public boolean bridgePasswordGroups = false;
     public boolean deleteEmptyGroupChannels = true;
     public List<String> botTokens = new ArrayList<>(List.of("PASTE_BOT_TOKEN_HERE"));
@@ -41,7 +40,6 @@ public final class BridgeConfig {
         requireId(guildId, "guildId");
         requireId(groupCategoryId, "groupCategoryId");
         if (tokens().isEmpty()) throw new IllegalArgumentException("Add at least one bot token");
-        if (groupChannelPrefix == null || groupChannelPrefix.length() > 60) throw new IllegalArgumentException("Invalid groupChannelPrefix");
     }
 
     private static void requireId(String value, String field) {
