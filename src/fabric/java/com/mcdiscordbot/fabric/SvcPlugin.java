@@ -9,6 +9,7 @@ public final class SvcPlugin implements VoicechatPlugin {
     @Override public void registerEvents(EventRegistration registration) {
         registration.registerEvent(VoicechatServerStartedEvent.class, event -> DiscordVoiceMod.voicechatStarted(event.getVoicechat()));
         registration.registerEvent(VoicechatServerStoppedEvent.class, event -> DiscordVoiceMod.voicechatStopped());
+        registration.registerEvent(PlayerConnectedEvent.class, event -> DiscordVoiceMod.refreshRoster(event.getConnection().getPlayer().getUuid()));
         registration.registerEvent(MicrophonePacketEvent.class, event -> {
             var engine = DiscordVoiceMod.engine();
             if (engine != null && !event.isCancelled()) engine.microphone(event.getSenderConnection(), event.getPacket().getOpusEncodedData());

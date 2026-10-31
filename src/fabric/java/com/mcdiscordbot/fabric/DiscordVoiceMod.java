@@ -23,19 +23,21 @@ public final class DiscordVoiceMod implements ModInitializer {
     private static volatile VoiceEngine engine;
     private static volatile VoicechatServerApi voicechat;
     private static MinecraftServer server;
+    private static final DiscordRoster roster = new DiscordRoster();
 
     @Override public void onInitialize() {
         try { BridgeConfig.load(CONFIG); }
         catch (Exception e) { LOG.error("Cannot load config/discordlinkplus-voice.json; bridge remains disabled."); }
         ServerLifecycleEvents.SERVER_STARTED.register(s -> { server = s; reload(); });
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> stop());
-        ServerLifecycleEvents.SERVER_STOPPED.register(s -> { server = null; voicechat = null; });
+        ServerLifecycleEvents.SERVER_STOPPED.register(s -> { server = null; voicechat = null; roster.clear(); });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             VoiceEngine current = engine;
             if (current != null) {
                 Set<UUID> ids = s.getPlayerList().getPlayers().stream().map(p -> p.getUUID()).collect(Collectors.toUnmodifiableSet());
                 current.players(ids);
             }
+            roster.tick(s, current);
         });
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> dispatcher.register(
             Commands.literal("discordvoice")
@@ -59,6 +61,7 @@ public final class DiscordVoiceMod implements ModInitializer {
     }
 
     public static VoiceEngine engine() { return engine; }
+    public static void refreshRoster(UUID player) { roster.refresh(player); }
     public static synchronized void voicechatStarted(VoicechatServerApi api) { voicechat = api; if (server != null) reload(); }
     public static synchronized void voicechatStopped() { voicechat = null; stop(); }
 

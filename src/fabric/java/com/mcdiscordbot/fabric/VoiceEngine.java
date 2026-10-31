@@ -62,6 +62,21 @@ public final class VoiceEngine implements AutoCloseable {
     public void players(Set<UUID> players) { online = players; }
     public String status() { return status; }
 
+    public BridgePresence presence(UUID player) {
+        if (closed || !online.contains(player)) return null;
+        String key = key(api.getConnectionOf(player));
+        Room room = key == null ? null : active.get(key);
+        if (room == null || room.bot == null || room.bot.client.getStatus() != JDA.Status.CONNECTED) return null;
+        Guild guild = room.bot.guild();
+        if (guild == null) return null;
+        var manager = guild.getAudioManager();
+        var channel = manager.getConnectedChannel();
+        if (!manager.isConnected() || channel == null || !room.channelId.equals(channel.getId())) return null;
+        return new BridgePresence(room.audio.identity(), UUID.fromString(key));
+    }
+
+    public record BridgePresence(UUID identity, UUID group) {}
+
     public void microphone(VoicechatConnection sender, byte[] opus) {
         if (closed || sender == null || !online.contains(sender.getPlayer().getUuid())) return;
         String key = key(sender);

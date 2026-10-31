@@ -18,7 +18,7 @@ This is a voice-only port based on [codingsushi79/discordlinkplus](https://githu
 
 ## Requirements
 
-Minecraft **26.3**, Java **25**, Fabric Loader **0.19.5+**, Fabric API, and Simple Voice Chat **2.6.27+**. The same Java runtime must permit native libraries; on Java 25, `--enable-native-access=ALL-UNNAMED` suppresses native access warnings. The bundle includes JDA, Opus, and DAVE natives for Linux x64/ARM64, Windows x64, and macOS.
+Minecraft **26.3**, Java **25**, Fabric Loader **0.19.5+**, Fabric API, and Simple Voice Chat **2.6.27**. The same Java runtime must permit native libraries; on Java 25, `--enable-native-access=ALL-UNNAMED` suppresses native access warnings. The bundle includes JDA, Opus, and DAVE natives for Linux x64/ARM64, Windows x64, and macOS.
 
 ## Discord setup
 
@@ -30,7 +30,7 @@ Minecraft **26.3**, Java **25**, Fabric Loader **0.19.5+**, Fabric API, and Simp
 ## Install and configure
 
 1. Stop the Minecraft server and back up any existing voice bridge configuration.
-2. Put `DiscordLinkPlus-Voice-1.0.1-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Disable the old JAR when updating; only one version should be enabled.
+2. Put `DiscordLinkPlus-Voice-1.0.2-fabric.26.3.jar` in `mods/`, alongside Fabric API and SVC. Disable the old JAR when updating; only one version should be enabled.
 3. Copy the provided `discordlinkplus-voice.json` to `config/discordlinkplus-voice.json`, or start once to generate a disabled template.
 4. Enter `guildId`, `groupCategoryId`, and the token in `botTokens`. Change `enabled` to `true` when ready. Keep tokens private and out of source control/logs. Every bot in the list must be invited to the same server and have the category permissions above.
 5. Start the server, or run `/discordvoice reload` after a configuration change. `/discordvoice status` shows bot gateway/voice state, waiting rooms, and audio frame/error counts. These commands require operator level 3 (admin) or the server console.
@@ -42,8 +42,16 @@ The mod keeps an ownership registry in `config/discordlinkplus-voice-channels.js
 
 With JDK 25 selected: `gradlew.bat build` (Windows) or `./gradlew build` (Linux). The installable shaded JAR is in `build/libs/`; do not install the `unbundled` or `sources` JAR.
 
-Validated locally: 13 automated checks (mixing, clipping, stale/overloaded queues, endian conversion, separate-group routing, isolated-group exclusion, private-group routing, exact channel names, config validation). The initial build also passed shaded Opus and DAVE native initialization, packaged JAR startup on an isolated Fabric 0.19.5 / Minecraft 26.3 server, and SVC native encode/decode and both room audio conversion paths through a disposable test addon.
+Validated locally: 17 automated checks (mixing, clipping, stale/overloaded queues, endian conversion, separate-group routing, isolated-group exclusion, private-group routing, exact channel names, config validation). The initial build also passed shaded Opus and DAVE native initialization, packaged JAR startup on an isolated Fabric 0.19.5 / Minecraft 26.3 server, and SVC native encode/decode and both room audio conversion paths through a disposable test addon.
 
 Also validated with the configured AxolotlVoice bot: real Discord login and DAVE voice connection; automatic channel creation for two SVC test groups; one bot serving the first group while the second waits; reassignment after the first group empties; automatic deletion of both temporary channels. Both test groups used local Carpet dummy players; no test audio was sent to the Discord channels.
 
 The initial build was deployed on the Linux Axolotl server, with successful bot login. The user confirmed that live audio, channel creation, and channel deletion work. Discord REST also confirmed that the live group channel's parent is the configured Axolotl Forever World category. Version 1.0.1 adds exact names and isolated-group exclusion. This is a custom build, not an upstream supported release.
+
+## Discord member indicator (1.0.2)
+
+The active bridge adds a synthetic **Discord** member to its group's SVC roster and HUD. Its signed Discord head uses SVC's ordinary speaking outline when Discord audio arrives; the volume slider controls combined Discord audio. No extra client mod is needed. This entry is only player-info and SVC state packets: no server login, world entity, player slot, Tab listing, or saved playerdata. It is removed when the player leaves the group or the bridge stops. Waiting and isolated groups have no Discord member.
+
+This integration is pinned to Minecraft 26.3 and SVC 2.6.27 because it uses their packet codecs. The head texture is bundled; no runtime MineSkin key or account is needed. Source: https://minecraft-heads.com/custom-heads/head/58280-discord ; signed property supplied by MineSkin. Texture hash: 739ee7154979b3f87735a1c8ac087814b7928d0576a2695ba01ed61631942045.
+
+Validation: 17 unit tests pass, including signed/unlisted player-info packet codec round-trip and speech/silence hold behavior. Packaged Fabric server startup and native Opus conversion tests pass. On the existing unmodified Minecraft/SVC client, the Discord head loaded, its outline activated with a local silent audio packet stream, and the outline cleared after the stream stopped. The visual probe used a disposable loopback test world and sent no audio into Discord.

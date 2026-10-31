@@ -21,11 +21,13 @@ public final class RoomAudio implements AudioSendHandler, AudioReceiveHandler, A
     private final VoicechatServerApi api;
     private final Predicate<VoicechatConnection> accepts;
     private final AudioMixer mixer = new AudioMixer();
+    private final SpeechActivity discordSpeech = new SpeechActivity();
     private final Map<UUID, Decoder> decoders = new HashMap<>();
     private final OpusEncoder encoder;
     private final StaticAudioChannel channel;
+    private final UUID identity = UUID.randomUUID();
     private ByteBuffer pending;
-    private boolean closed;
+    private volatile boolean closed;
     private long receivedFrames;
     private long sentFrames;
     private long codecErrors;
@@ -34,7 +36,7 @@ public final class RoomAudio implements AudioSendHandler, AudioReceiveHandler, A
         this.api = api;
         this.accepts = accepts;
         encoder = api.createEncoder();
-        channel = api.createStaticAudioChannel(UUID.randomUUID());
+        channel = api.createStaticAudioChannel(identity);
         channel.setBypassGroupIsolation(true);
         channel.setFilter(player -> accepts.test(api.getConnectionOf(player.getUuid())));
     }
@@ -99,11 +101,14 @@ public final class RoomAudio implements AudioSendHandler, AudioReceiveHandler, A
         if (closed || audio.getUsers().isEmpty()) return;
         short[] mono = AudioMixer.monoFromStereoBigEndian(audio.getAudioData(1.0));
         if (mono == null) return;
+        discordSpeech.accept(mono, System.nanoTime());
+        if (!discordSpeech.speaking(System.nanoTime())) return;
         try { channel.send(encoder.encode(mono)); receivedFrames++; }
         catch (RuntimeException e) { codecErrors++; }
     }
 
     public synchronized String metrics() { return "MC→Discord=" + sentFrames + ", Discord→MC=" + receivedFrames + ", codecErrors=" + codecErrors; }
+    public UUID identity() { return identity; }
 
     @Override public synchronized void close() {
         if (closed) return;
