@@ -15,6 +15,7 @@ plugins/DiscordLink+/
 
 # Fabric development and private runtime state
 /.fabric/
+/logs/
 /config/discordlinkplus-voice.json
 /config/discordlinkplus-voice-channels.json*
 /server/

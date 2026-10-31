@@ -1,4 +1,4 @@
-> **Fabric voice port branch:** This branch builds DiscordLink+ Voice for Fabric 26.3 / SVC 2.6.27. See [VOICE-PORT.md](VOICE-PORT.md) for setup and [PORTING.md](PORTING.md) for the commit series, build, and rebase workflow. The original Bukkit README follows for provenance.
+> **Fabric port branch:** This branch builds DiscordLink+ text and voice bridging for Fabric 26.3 / SVC 2.6.27. See [VOICE-PORT.md](VOICE-PORT.md) for setup, [CHAT-SETUP.md](CHAT-SETUP.md) for adding text chat, and [PORTING.md](PORTING.md) for the commit series, build, and rebase workflow. The original Bukkit README follows for provenance.
 
 # DiscordLink+
 

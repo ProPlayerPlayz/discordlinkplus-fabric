@@ -1,9 +1,11 @@
-DiscordLink+ Voice - unofficial Fabric 26.3 voice-only port.
+DiscordLink+ - unofficial Fabric 26.3 text and voice port.
 Based on the voice bridging design in codingsushi79/discordlinkplus,
 upstream commit 6360549041dfa0158deeed3365fce87fe67a61a8.
 Upstream identifies its license as MIT in README.md.
 Original upstream source is retained in src/main for attribution/reference,
 but is not compiled into the Fabric mod. New implementation: src/fabric.
 The port adds group routing, a bot pool, bounded PCM mixing, static SVC
-audio channels and server-side lifecycle integration. It does not include
-the upstream chat relay or Discord account linking gate.
+audio channels and server-side lifecycle integration. The text relay ports
+public chat and join/leave/death announcements and adds advancement events,
+player webhooks, active-skin avatars, and bounded cross-thread delivery.
+The Discord account linking gate and remote console are not included.

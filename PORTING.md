@@ -1,6 +1,6 @@
 # Maintaining the Fabric voice port
 
-This branch is a server-only Fabric voice bridge for Minecraft 26.3 and Simple Voice Chat 2.6.27. It is based on `codingsushi79/discordlinkplus` at `6360549041dfa0158deeed3365fce87fe67a61a8`.
+This branch is a server-only Fabric text and voice bridge for Minecraft 26.3 and Simple Voice Chat 2.6.27. It is based on `codingsushi79/discordlinkplus` at `6360549041dfa0158deeed3365fce87fe67a61a8`.
 
 Read [VOICE-PORT.md](VOICE-PORT.md) for setup and behavior. Runtime configuration is generated disabled by default; [examples/discordlinkplus-voice.json](examples/discordlinkplus-voice.json) is a credential-free template.
 
@@ -23,8 +23,9 @@ Annotated checkpoints identify the release source snapshots:
 | `fabric-v1.0.0-mc26.3` | Initial Fabric voice bridge | 11 |
 | `fabric-v1.0.1-mc26.3` | Exact names; isolated groups excluded | 13 |
 | `fabric-v1.0.2-mc26.3` | Discord member and speaking head; matches deployed Java source | 17 |
+| `fabric-v1.1.0-mc26.3` | Optional text chat, player webhooks, event messages, offline Skin Restorer skins | 31 |
 
-The latest maintenance commit keeps the same Java implementation and resolved runtime dependency versions as 1.0.2. It makes version updates easier to review. Release tags are fixed historical checkpoints; do not move them after rebasing.
+The original version-property maintenance commit keeps the same Java implementation and resolved runtime dependency versions as 1.0.2. Version 1.1.0 adds text chat in separate relay-core, platform-integration, and setup-documentation commits. Release tags are fixed historical checkpoints; do not move them after rebasing.
 
 ## Build
 
@@ -63,7 +64,7 @@ git range-diff "$previousBase..backup/fabric-26.3-before-rebase" upstream/main..
 
 Use a fresh backup name for each rebase. Resolve conflicts one commit at a time with `git add <resolved-files>` and `git rebase --continue`; `git rebase --abort` returns to the starting state. Keep the Fabric source-set exclusion and native/shading setup when resolving upstream build changes. Inspect changes to the renamed upstream workflows without re-enabling Bukkit publication for this branch.
 
-Upstream is a Bukkit plugin, so rebasing preserves history and applies compatible changes but does not translate upstream Bukkit fixes into the Fabric implementation automatically. Review upstream voice, config, and scheduler changes for equivalent changes needed in `src/fabric`. The upstream text-chat relay and account-linking gate are intentionally outside this voice-only port.
+Upstream is a Bukkit plugin, so rebasing preserves history and applies compatible changes but does not translate upstream Bukkit fixes into the Fabric implementation automatically. Review upstream chat, voice, config, and scheduler changes for equivalent changes needed in `src/fabric`. The account-linking gate and remote console commands remain outside this port.
 
 ## Port to another Minecraft/SVC version
 
@@ -79,6 +80,9 @@ These integration points need direct source/API review:
 | `SvcPlugin.java` | SVC server lifecycle, microphone, group, and voice reconnect events |
 | `RoomAudio.java` | SVC static channel and Opus APIs; JDA PCM/audio callbacks |
 | `VoiceEngine.java` | SVC group/connection APIs and JDA category/channel/voice lifecycle |
+| `ChatEvents.java` | Fabric accepted-public-chat/global-message events, chat type/filter masks, and literal system-message delivery |
+| `ChatBridge.java` | JDA message events, intents, text channels, and webhook builders; shares the first bot |
+| `ChatRelay.java`, `ChatText.java` | Bounded cross-thread messages, formatting, event selection, and active texture-property avatar URLs |
 | `build.gradle.kts`, `gradle.properties`, `fabric.mod.json` | Matching compile/runtime versions, Java, natives, packaging, and metadata |
 
 The Discord head requires no client addon. Its synthetic SVC member UUID is also the static audio channel UUID, allowing existing clients to use their normal speaking outline and volume slider. The profile is unlisted, and no Minecraft player entity is spawned. Preserve recipient-only group scoping and removal/reconnect handling when porting. SVC internals are deliberately pinned to the exact reviewed version; do not merely widen the version constraint without checking its protocol and UI behavior.
@@ -91,6 +95,8 @@ After compilation and automated tests, use a separate test world to verify:
 - A real SVC client showing the Discord head and speaking outline, volume adjustment, group switching, voice reconnect, bridge loss, and no Tab entry or world entity.
 
 The 1.0.2 source passed local native/audio probes and a real unmodified-client head/highlight check. The user subsequently confirmed the deployed indicator works. Future compatibility versions need their own checks; a successful rebase alone is not proof of runtime compatibility.
+
+Version 1.1.0 additionally passed 31 unit checks, packaged startup, and a local offline Fabric 26.3 / Skin Restorer 2.11.0 probe. The probe applied two different skin properties through Skin Restorer's actual `SkinService.applySkin` method to the same offline profile, then dispatched public chat events and checked the resulting avatar URLs. It also checked private/filtered chat exclusion, join broadcasts, literal inbound delivery, and echo prevention. Tests used in-memory Discord interfaces and no live Discord messages. A real Discord round trip remains part of manual installation verification. No Axolotl server files or configuration were changed for this release.
 
 Never commit tokens, live configs, channel registries, world/player data, logs, or test server directories. Use a private external deployment config and keep the example disabled.
 

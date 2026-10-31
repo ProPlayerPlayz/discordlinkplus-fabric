@@ -6,5 +6,19 @@
   "deleteEmptyGroupChannels": true,
   "botTokens": [
     "PASTE_BOT_TOKEN_HERE"
-  ]
+  ],
+  "chat": {
+    "enabled": false,
+    "channelId": "",
+    "minecraftToDiscord": true,
+    "discordToMinecraft": true,
+    "useWebhooks": true,
+    "avatarUrl": "https://mc-heads.net/avatar/%texture%/128",
+    "minecraftToDiscordFormat": "**%player%**: %message%",
+    "webhookMessageFormat": "%message%",
+    "discordToMinecraftFormat": "[Discord] %user%: %message%",
+    "joinLeaveMessages": true,
+    "deathMessages": true,
+    "advancementMessages": true
+  }
 }
