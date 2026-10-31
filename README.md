@@ -1,3 +1,5 @@
+> **Fabric voice port branch:** This branch builds DiscordLink+ Voice for Fabric 26.3 / SVC 2.6.27. See [VOICE-PORT.md](VOICE-PORT.md) for setup and [PORTING.md](PORTING.md) for the commit series, build, and rebase workflow. The original Bukkit README follows for provenance.
+
 # DiscordLink+
 
 A **Paper/Bukkit/Folia-compatible** Minecraft plugin that bridges your server with Discord — similar to [DiscordSRV](https://github.com/DiscordSRV/DiscordSRV) — with account linking and **Simple Voice Chat** group bridging.

@@ -3,14 +3,22 @@ plugins {
     id("net.fabricmc.fabric-loom") version "1.19.3"
     id("com.gradleup.shadow") version "9.4.2"
 }
+val targetMinecraft = providers.gradleProperty("minecraftVersion").get()
+val targetJava = providers.gradleProperty("javaVersion").get().toInt()
+val fabricLoaderVersion = providers.gradleProperty("loaderVersion").get()
+val fabricApiVersion = providers.gradleProperty("fabricApiVersion").get()
+val svcVersion = providers.gradleProperty("voicechatVersion").get()
+val jdaVersion = providers.gradleProperty("jdaVersion").get()
+val daveVersion = providers.gradleProperty("daveVersion").get()
+
 group = "com.mcdiscordbot"
-version = "1.0.2-fabric.26.3"
+version = "${providers.gradleProperty("modVersion").get()}-fabric.$targetMinecraft"
 base { archivesName.set("DiscordLinkPlus-Voice") }
-java { toolchain.languageVersion.set(JavaLanguageVersion.of(25)); withSourcesJar() }
+java { toolchain.languageVersion.set(JavaLanguageVersion.of(targetJava)); withSourcesJar() }
 sourceSets {
     main { java.setSrcDirs(listOf("src/fabric/java")); resources.setSrcDirs(listOf("src/fabric/resources")) }
 }
-val bundled by configurations.creating
+val bundled = configurations.create("bundled")
 configurations.implementation { extendsFrom(bundled) }
 repositories {
     mavenCentral()
@@ -18,23 +26,33 @@ repositories {
     maven("https://api.modrinth.com/maven")
 }
 dependencies {
-    minecraft("com.mojang:minecraft:26.3")
-    implementation("net.fabricmc:fabric-loader:0.19.5")
-    implementation("net.fabricmc.fabric-api:fabric-api:0.165.0+26.3")
-    compileOnly("de.maxhenkel.voicechat:voicechat-api:2.6.27")
-    compileOnly("maven.modrinth:simple-voice-chat:fabric-2.6.27+26.3")
-    bundled("net.dv8tion:JDA:6.7.0") { exclude(group = "org.slf4j") }
-    bundled("club.minnced:jdave-api:0.1.8")
-    bundled("club.minnced:jdave-native-linux-x86-64:0.1.8")
-    bundled("club.minnced:jdave-native-linux-aarch64:0.1.8")
-    bundled("club.minnced:jdave-native-win-x86-64:0.1.8")
-    bundled("club.minnced:jdave-native-darwin:0.1.8")
+    minecraft("com.mojang:minecraft:$targetMinecraft")
+    implementation("net.fabricmc:fabric-loader:$fabricLoaderVersion")
+    implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+    compileOnly("de.maxhenkel.voicechat:voicechat-api:$svcVersion")
+    compileOnly("maven.modrinth:simple-voice-chat:fabric-$svcVersion+$targetMinecraft")
+    bundled("net.dv8tion:JDA:$jdaVersion") { exclude(group = "org.slf4j") }
+    bundled("club.minnced:jdave-api:$daveVersion")
+    bundled("club.minnced:jdave-native-linux-x86-64:$daveVersion")
+    bundled("club.minnced:jdave-native-linux-aarch64:$daveVersion")
+    bundled("club.minnced:jdave-native-win-x86-64:$daveVersion")
+    bundled("club.minnced:jdave-native-darwin:$daveVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
-    testRuntimeOnly("maven.modrinth:simple-voice-chat:fabric-2.6.27+26.3")
+    testRuntimeOnly("maven.modrinth:simple-voice-chat:fabric-$svcVersion+$targetMinecraft")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
-tasks.withType<JavaCompile>().configureEach { options.release.set(25); options.encoding = "UTF-8" }
-tasks.processResources { inputs.property("version", project.version); filesMatching("fabric.mod.json") { expand("version" to project.version) } }
+tasks.withType<JavaCompile>().configureEach { options.release.set(targetJava); options.encoding = "UTF-8" }
+val modMetadata = mapOf(
+    "version" to project.version.toString(),
+    "minecraftVersion" to targetMinecraft,
+    "javaVersion" to targetJava.toString(),
+    "loaderVersion" to fabricLoaderVersion,
+    "voicechatVersion" to svcVersion
+)
+tasks.processResources {
+    inputs.properties(modMetadata)
+    filesMatching("fabric.mod.json") { expand(modMetadata) }
+}
 tasks.test { useJUnitPlatform() }
 tasks.shadowJar {
     configurations = listOf(bundled)

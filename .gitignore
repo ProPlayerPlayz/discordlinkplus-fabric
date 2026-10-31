@@ -12,3 +12,10 @@ bin/
 # Local server test
 run/
 plugins/DiscordLink+/
+
+# Fabric development and private runtime state
+/.fabric/
+/config/discordlinkplus-voice.json
+/config/discordlinkplus-voice-channels.json*
+/server/
+*.private.json

@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "guildId": "",
+  "groupCategoryId": "",
+  "bridgePasswordGroups": false,
+  "deleteEmptyGroupChannels": true,
+  "botTokens": [
+    "PASTE_BOT_TOKEN_HERE"
+  ]
+}

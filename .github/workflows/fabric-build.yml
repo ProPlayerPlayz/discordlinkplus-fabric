@@ -1,0 +1,43 @@
+name: Fabric build
+
+on:
+  push:
+    branches: ['fabric-*', 'fabric/**']
+    tags: ['fabric-v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read target Java version
+        id: java
+        shell: bash
+        run: |
+          target_java="$(sed -n 's/^javaVersion=//p' gradle.properties | tr -d '\r')"
+          echo "version=$target_java" >> "$GITHUB_OUTPUT"
+      - name: Set up target JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ steps.java.outputs.version }}
+          cache: gradle
+      - name: Build and test Fabric mod
+        run: ./gradlew build --no-daemon --console=plain
+      - name: Upload installable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscordLinkPlus-Voice-Fabric
+          path: |
+            build/libs/DiscordLinkPlus-Voice-*.jar
+            !build/libs/*-unbundled.jar
+            !build/libs/*-sources.jar
+          if-no-files-found: error
