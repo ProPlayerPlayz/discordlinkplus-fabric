@@ -37,6 +37,7 @@ public final class VoiceEngine implements AutoCloseable {
     private final BridgeConfig config;
     private final VoicechatServerApi api;
     private final Path stateFile;
+    private final ChatBridge chat;
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "DiscordLinkPlus-rooms"); t.setDaemon(true); return t;
     });
@@ -52,15 +53,18 @@ public final class VoiceEngine implements AutoCloseable {
 
     public VoiceEngine(BridgeConfig config, VoicechatServerApi api, Path stateFile) {
         this.config = config; this.api = api; this.stateFile = stateFile;
+        chat = new ChatBridge(config);
     }
 
     public void start() {
+        chat.start();
         worker.execute(this::boot);
         worker.scheduleWithFixedDelay(this::reconcileSafely, 2, 1, TimeUnit.SECONDS);
     }
 
     public void players(Set<UUID> players) { online = players; }
-    public String status() { return status; }
+    public String status() { return status + "\n" + chat.status(); }
+    ChatRelay chat() { return config.chat.enabled ? chat.relay() : null; }
 
     public BridgePresence presence(UUID player) {
         if (closed || !online.contains(player)) return null;
@@ -87,6 +91,7 @@ public final class VoiceEngine implements AutoCloseable {
     public void removeSpeaker(UUID player) { active.values().forEach(room -> room.audio.remove(player)); }
 
     private String key(VoicechatConnection connection) {
+        if (!config.enabled) return null;
         if (connection == null || !connection.isConnected() || connection.isDisabled()) return null;
         Group group = connection.getGroup();
         return Routing.room(group == null ? null : group.getId(), group != null && group.hasPassword(), group != null && group.getType() == Group.Type.ISOLATED, config.bridgePasswordGroups);
@@ -94,7 +99,7 @@ public final class VoiceEngine implements AutoCloseable {
 
     private void boot() {
         try {
-            if (Files.exists(stateFile)) {
+            if (config.enabled && Files.exists(stateFile)) {
                 try (var reader = Files.newBufferedReader(stateFile)) {
                     Map<String, OwnedChannel> loaded = GSON.fromJson(reader, new TypeToken<Map<String, OwnedChannel>>() {}.getType());
                     if (loaded != null) owned.putAll(loaded);
@@ -112,12 +117,19 @@ public final class VoiceEngine implements AutoCloseable {
             if (closed) return;
             int number = ++index;
             try {
-                JDA client = JDABuilder.createDefault(token, GatewayIntent.GUILD_VOICE_STATES)
+                var intents = java.util.EnumSet.of(GatewayIntent.GUILD_VOICE_STATES);
+                if (number == 1 && config.chat.enabled && config.chat.discordToMinecraft) {
+                    intents.add(GatewayIntent.GUILD_MESSAGES);
+                    intents.add(GatewayIntent.MESSAGE_CONTENT);
+                }
+                JDABuilder builder = JDABuilder.createDefault(token, intents)
                     .setMemberCachePolicy(MemberCachePolicy.VOICE)
                     .enableCache(CacheFlag.VOICE_STATE)
                     .disableCache(CacheFlag.ACTIVITY, CacheFlag.CLIENT_STATUS, CacheFlag.EMOJI, CacheFlag.STICKER, CacheFlag.SCHEDULED_EVENTS)
-                    .setAudioModuleConfig(new AudioModuleConfig().withDaveSessionFactory(new JDaveSessionFactory()))
-                    .build();
+                    .setAudioModuleConfig(new AudioModuleConfig().withDaveSessionFactory(new JDaveSessionFactory()));
+                if (number == 1 && config.chat.enabled) builder.addEventListeners(chat);
+                JDA client = builder.build();
+                if (number == 1) chat.bind(client);
                 Bot bot = new Bot(number, client);
                 bots.add(bot);
                 if (closed) client.shutdownNow();
@@ -146,6 +158,10 @@ public final class VoiceEngine implements AutoCloseable {
             return;
         }
         Guild guild = manager.guild();
+        if (!config.enabled) {
+            status = "Voice bridge disabled; text-only bot gateway: " + manager.client.getStatus() + ".";
+            return;
+        }
         if (guild.getCategoryById(config.groupCategoryId) == null) {
             status = "groupCategoryId is missing, inaccessible, or belongs to another Discord server.";
             return;
@@ -283,6 +299,7 @@ public final class VoiceEngine implements AutoCloseable {
 
     @Override public void close() {
         closed = true;
+        chat.close();
         Map<String, Room> previous = active;
         active = Map.of();
         previous.values().forEach(room -> room.audio.close());

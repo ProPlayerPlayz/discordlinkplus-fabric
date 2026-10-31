@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "discordlinkplus_voice",
   "version": "${version}",
-  "name": "DiscordLink+ Voice (Fabric port)",
-  "description": "Temporary two-way Discord voice channels for non-isolated Simple Voice Chat groups.",
+  "name": "DiscordLink+ (Fabric port)",
+  "description": "Two-way Discord text chat and temporary voice channels for Simple Voice Chat groups.",
   "authors": [
     "DiscordLink+ upstream: codingsushi79",
     "Axolotl Fabric voice port"

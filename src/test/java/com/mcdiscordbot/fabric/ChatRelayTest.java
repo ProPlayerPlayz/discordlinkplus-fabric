@@ -7,6 +7,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ChatRelayTest {
     private ChatConfig config() { var config = new ChatConfig(); config.enabled = true; config.channelId = "234567890123456789"; return config; }
+    @Test void offlinePlayerSkinChangesUseANewTextureOnTheNextMessage() {
+        var relay = new ChatRelay("guild", config());
+        UUID offline = UUID.nameUUIDFromBytes("OfflinePlayer:OfflineUser".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        for (String hash : new String[]{"a".repeat(64), "b".repeat(64)}) {
+            String json = "{\"textures\":{\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/" + hash + "\"}}}";
+            String texture = java.util.Base64.getEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            relay.minecraft(offline, "OfflineUser", texture, "hello");
+            var message = relay.nextOutgoing();
+            assertEquals("https://mc-heads.net/avatar/" + hash + "/128", message.avatar());
+            assertFalse(message.avatar().contains(offline.toString()));
+        }
+    }
     @Test void incomingOnlyAcceptsHumansInTheConfiguredGuildAndChannel() {
         var config = config(); var relay = new ChatRelay("guild", config);
         assertFalse(relay.discord("other", config.channelId, false, false, "User", "hello"));

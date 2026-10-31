@@ -26,6 +26,7 @@ public final class DiscordVoiceMod implements ModInitializer {
     private static final DiscordRoster roster = new DiscordRoster();
 
     @Override public void onInitialize() {
+        ChatEvents.register();
         try { BridgeConfig.load(CONFIG); }
         catch (Exception e) { LOG.error("Cannot load config/discordlinkplus-voice.json; bridge remains disabled."); }
         ServerLifecycleEvents.SERVER_STARTED.register(s -> { server = s; reload(); });
@@ -38,24 +39,27 @@ public final class DiscordVoiceMod implements ModInitializer {
                 current.players(ids);
             }
             roster.tick(s, current);
+            ChatEvents.tick(s);
         });
-        CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> dispatcher.register(
-            Commands.literal("discordvoice")
+        CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> {
+          for (String name : new String[]{"discordlink", "discordvoice"}) dispatcher.register(
+            Commands.literal(name)
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
                 .executes(ctx -> status(ctx.getSource()))
                 .then(Commands.literal("status").executes(ctx -> status(ctx.getSource())))
                 .then(Commands.literal("reload").executes(ctx -> {
                     reload();
-                    ctx.getSource().sendSuccess(() -> Component.literal("Voice bridge config reloaded; use /discordvoice status."), false);
+                    ctx.getSource().sendSuccess(() -> Component.literal("DiscordLink+ config reloaded; use /discordlink status."), false);
                     return 1;
                 }))
-        ));
-        LOG.info("DiscordLink+ Voice Fabric 26.3 loaded. Config: config/discordlinkplus-voice.json");
+          );
+        });
+        LOG.info("DiscordLink+ Fabric 26.3 loaded. Config: config/discordlinkplus-voice.json");
     }
 
     private static int status(net.minecraft.commands.CommandSourceStack source) {
         VoiceEngine current = engine;
-        String value = current == null ? "Voice bridge disabled. Configure config/discordlinkplus-voice.json and /discordvoice reload." : current.status();
+        String value = current == null ? "Discord bridge disabled. Configure config/discordlinkplus-voice.json and /discordlink reload." : current.status();
         source.sendSuccess(() -> Component.literal(value), false);
         return 1;
     }
@@ -68,9 +72,9 @@ public final class DiscordVoiceMod implements ModInitializer {
     private static synchronized void reload() {
         BridgeConfig config;
         try { config = BridgeConfig.load(CONFIG); }
-        catch (Exception e) { LOG.error("Invalid voice config; keeping current bridge. Check JSON, IDs and token placeholders."); return; }
+        catch (Exception e) { LOG.error("Invalid DiscordLink+ config; keeping current bridge. Check JSON, IDs and token placeholders."); return; }
         stop();
-        if (!config.enabled) { LOG.info("Voice bridge is disabled in config."); return; }
+        if (!config.enabled && !config.chat.enabled) { LOG.info("Discord bridge is disabled in config."); return; }
         if (voicechat == null) { LOG.info("Waiting for Simple Voice Chat server API."); return; }
         engine = new VoiceEngine(config, voicechat, FabricLoader.getInstance().getConfigDir().resolve("discordlinkplus-voice-channels.json"));
         engine.start();
