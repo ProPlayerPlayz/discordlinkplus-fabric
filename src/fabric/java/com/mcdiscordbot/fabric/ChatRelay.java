@@ -37,6 +37,14 @@ final class ChatRelay {
         if (!content.isBlank()) offer(new Outgoing(null, null, content, content, true, clock.getAsLong()));
     }
 
+    synchronized boolean lifecycle(boolean started) {
+        if (closed || !config.enabled || !config.minecraftToDiscord || !config.serverMessages) return false;
+        String content = ChatText.limit(ChatText.clean(started ? config.serverStartedMessage : config.serverStoppedMessage), 1900);
+        if (outgoing.size() >= CAPACITY) { outgoing.removeLast(); dropped++; }
+        outgoing.addFirst(new Outgoing(null, null, content, content, true, clock.getAsLong()));
+        return true;
+    }
+
     synchronized boolean discord(String guild, String channel, boolean bot, boolean webhook, String name, String text) {
         if (closed || !config.enabled || !config.discordToMinecraft || bot || webhook || !guildId.equals(guild) || !config.channelId.equals(channel)) return false;
         String content = ChatText.limit(ChatText.clean(text), 900);

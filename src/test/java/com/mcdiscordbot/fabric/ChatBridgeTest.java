@@ -9,6 +9,8 @@ import net.dv8tion.jda.api.requests.RestAction;
 import net.dv8tion.jda.api.requests.restaction.MessageCreateAction;
 import net.dv8tion.jda.api.requests.restaction.WebhookMessageCreateAction;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Path;
 import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -23,7 +25,7 @@ class ChatBridgeTest {
         return config;
     }
 
-    @Test void webhookUsesPlayerIdentityAndNoMentionsAndSystemEventsUseTheBot() {
+    @Test void webhookUsesPlayerIdentityAndNoMentionsAndSystemEventsUseServerIdentity() {
         var config = config(); var network = new Network(false);
         try (var bridge = new ChatBridge(config)) {
             bridge.bind(network.client);
@@ -35,9 +37,61 @@ class ChatBridgeTest {
             assertEquals(List.of(), network.mentions);
             bridge.relay().game("multiplayer.player.joined", "Friend joined");
             bridge.work();
-            assertEquals(List.of("Friend joined"), network.botMessages);
+            assertEquals(List.of("hello @everyone", "Friend joined"), network.webhookMessages);
+            assertTrue(network.botMessages.isEmpty());
+            assertEquals("Minecraft Server", network.username);
+            assertEquals(1, network.avatarOverrides);
             assertEquals(List.of(), network.mentions);
         }
+    }
+
+    @Test void existingWebhookUsesServerIconForAllNonPlayerAnnouncements(@TempDir Path temp) throws Exception {
+        var image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        Path icon = temp.resolve("server-icon.png");
+        javax.imageio.ImageIO.write(image, "png", icon.toFile());
+        var config = config(); config.chat.serverName = "Axolotl";
+        var network = new Network(false);
+        try (var bridge = new ChatBridge(config, icon)) {
+            bridge.bind(network.client);
+            for (String key : List.of("multiplayer.player.joined", "multiplayer.player.left", "death.attack.generic", "chat.type.advancement.task")) {
+                bridge.relay().game(key, "event " + key); bridge.work();
+                assertEquals("Axolotl", network.username);
+            }
+            assertNotNull(network.defaultAvatar);
+            assertEquals(Icon.from(icon.toFile()).getEncoding(), network.defaultAvatar.getEncoding());
+            assertEquals(0, network.avatarOverrides);
+            assertTrue(network.botMessages.isEmpty());
+            assertTrue(bridge.status().contains("Server announcement avatar: server-icon.png"));
+        }
+    }
+
+    @Test void newWebhookReceivesServerIconAndNormalShutdownFlushesItsStopMessage(@TempDir Path temp) throws Exception {
+        Path icon = temp.resolve("server-icon.png");
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(64, 64, 2), "png", icon.toFile());
+        var network = new Network(false, false);
+        try (var bridge = new ChatBridge(config(), icon)) {
+            bridge.bind(network.client);
+            assertTrue(bridge.relay().lifecycle(true));
+            bridge.work();
+            assertNotNull(network.defaultAvatar);
+            assertEquals(List.of("Server started."), network.webhookMessages);
+            bridge.close(true);
+            assertEquals(List.of("Server started.", "Server stopped."), network.webhookMessages);
+            assertEquals(0, network.avatarOverrides);
+            assertTrue(network.botMessages.isEmpty());
+        }
+        assertEquals(2, network.webhookMessages.size());
+    }
+
+    @Test void reloadCloseDoesNotAnnounceAServerStopAndInvalidIconsDoNotBreakDelivery(@TempDir Path temp) throws Exception {
+        Path icon = temp.resolve("server-icon.png"); java.nio.file.Files.writeString(icon, "not a PNG");
+        var network = new Network(false);
+        try (var bridge = new ChatBridge(config(), icon)) {
+            bridge.bind(network.client);
+            bridge.relay().game("multiplayer.player.left", "Friend left"); bridge.work();
+            assertTrue(bridge.status().contains("unreadable"));
+        }
+        assertEquals(List.of("Friend left"), network.webhookMessages);
     }
 
     @Test void missingWebhookPermissionFallsBackToBotWithoutDroppingTheChat() {
@@ -91,6 +145,8 @@ class ChatBridgeTest {
     private static final class Network {
         final List<String> botMessages = new ArrayList<>(), webhookMessages = new ArrayList<>();
         Object mentions;
+        Icon defaultAvatar;
+        int avatarOverrides;
         String username, avatar, createdWebhookName;
         final SelfUser self = stub(SelfUser.class, (name, args) -> name.equals("getId") ? "bot" : null);
         final Webhook webhook;
@@ -107,6 +163,10 @@ class ChatBridgeTest {
                 case "getType" -> WebhookType.INCOMING;
                 case "getName" -> "MC Link Chat";
                 case "getOwnerAsUser" -> self;
+                case "getManager" -> stub(net.dv8tion.jda.api.managers.WebhookManager.class, (method, values) -> {
+                    if (method.equals("setAvatar")) defaultAvatar = (Icon) values[0];
+                    return method.equals("submit") ? CompletableFuture.completedFuture(null) : null;
+                });
                 case "sendMessage" -> { webhookMessages.add(args[0].toString()); yield sendAction(WebhookMessageCreateAction.class); }
                 default -> null;
             });
@@ -123,8 +183,10 @@ class ChatBridgeTest {
                     if (supplied.toLowerCase(Locale.ROOT).contains("discord") || supplied.toLowerCase(Locale.ROOT).contains("clyde"))
                         throw new IllegalArgumentException("Reserved webhook name");
                     createdWebhookName = supplied;
-                    yield stub(net.dv8tion.jda.api.requests.restaction.WebhookAction.class,
-                        (method, ignored) -> method.equals("submit") ? CompletableFuture.completedFuture(webhook) : null);
+                    yield stub(net.dv8tion.jda.api.requests.restaction.WebhookAction.class, (method, values) -> {
+                        if (method.equals("setAvatar")) defaultAvatar = (Icon) values[0];
+                        return method.equals("submit") ? CompletableFuture.completedFuture(webhook) : null;
+                    });
                 }
                 case "sendMessage" -> { botMessages.add(args[0].toString()); yield sendAction(MessageCreateAction.class); }
                 default -> null;
@@ -146,7 +208,7 @@ class ChatBridgeTest {
             return stub(type, (name, args) -> switch (name) {
                 case "setAllowedMentions" -> { mentions = args[0]; yield null; }
                 case "setUsername" -> { username = args[0].toString(); yield null; }
-                case "setAvatarUrl" -> { avatar = args[0].toString(); yield null; }
+                case "setAvatarUrl" -> { avatarOverrides++; avatar = args[0].toString(); yield null; }
                 case "submit" -> CompletableFuture.completedFuture(null);
                 default -> null;
             });

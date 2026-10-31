@@ -65,6 +65,7 @@ public final class VoiceEngine implements AutoCloseable {
     public void players(Set<UUID> players) { online = players; }
     public String status() { return status + "\n" + chat.status(); }
     ChatRelay chat() { return config.chat.enabled ? chat.relay() : null; }
+    boolean serverStarted() { return chat.relay().lifecycle(true); }
 
     public BridgePresence presence(UUID player) {
         if (closed || !online.contains(player)) return null;
@@ -297,9 +298,10 @@ public final class VoiceEngine implements AutoCloseable {
         return base.length() > 100 ? base.substring(0, 100) : base;
     }
 
-    @Override public void close() {
+    @Override public void close() { close(false); }
+    void close(boolean announceStop) {
         closed = true;
-        chat.close();
+        chat.close(announceStop);
         Map<String, Room> previous = active;
         active = Map.of();
         previous.values().forEach(room -> room.audio.close());

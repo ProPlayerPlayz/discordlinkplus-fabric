@@ -14,11 +14,16 @@ public final class ChatConfig {
     public boolean joinLeaveMessages = true;
     public boolean deathMessages = true;
     public boolean advancementMessages = true;
+    public String serverName = "Minecraft Server";
+    public boolean serverMessages = true;
+    public String serverStartedMessage = "Server started.";
+    public String serverStoppedMessage = "Server stopped.";
 
     public void validate() {
         if (!enabled) return;
         BridgeConfig.requireId(channelId, "chat.channelId");
-        for (String format : new String[]{minecraftToDiscordFormat, webhookMessageFormat, discordToMinecraftFormat}) {
+        if (!ChatBridge.validWebhookName(serverName)) throw new IllegalArgumentException("Invalid chat.serverName for a Discord webhook");
+        for (String format : new String[]{minecraftToDiscordFormat, webhookMessageFormat, discordToMinecraftFormat, serverStartedMessage, serverStoppedMessage}) {
             if (format == null || format.isBlank() || format.length() > 1000) throw new IllegalArgumentException("Invalid chat format");
         }
         if (avatarUrl == null || avatarUrl.length() > 1000) throw new IllegalArgumentException("Invalid chat.avatarUrl");

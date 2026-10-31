@@ -3,6 +3,7 @@ package com.mcdiscordbot.fabric;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Webhook;
 import net.dv8tion.jda.api.entities.WebhookType;
+import net.dv8tion.jda.api.entities.Icon;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -18,6 +19,7 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("DiscordLinkPlusChat");
     private final BridgeConfig config;
     private final ChatRelay relay;
+    private final java.nio.file.Path serverIcon;
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "DiscordLinkPlus-chat"); t.setDaemon(true); return t;
     });
@@ -28,11 +30,15 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
     private boolean checkedWebhook;
     private long lastWarning;
     private volatile String webhookFailure = "", deliveryFailure = "";
+    private volatile String iconState = "not loaded";
     private final java.util.concurrent.atomic.AtomicLong discordEvents = new java.util.concurrent.atomic.AtomicLong();
     private final java.util.concurrent.atomic.AtomicLong channelMessages = new java.util.concurrent.atomic.AtomicLong();
     private final java.util.concurrent.atomic.AtomicLong ignoredBotMessages = new java.util.concurrent.atomic.AtomicLong();
 
-    ChatBridge(BridgeConfig config) { this.config = config; relay = new ChatRelay(config.guildId, config.chat); }
+    ChatBridge(BridgeConfig config) { this(config, java.nio.file.Path.of("server-icon.png")); }
+    ChatBridge(BridgeConfig config, java.nio.file.Path serverIcon) {
+        this.config = config; this.serverIcon = serverIcon; relay = new ChatRelay(config.guildId, config.chat);
+    }
     void start() { if (config.chat.enabled) worker.scheduleWithFixedDelay(this::work, 100, 100, TimeUnit.MILLISECONDS); }
     void bind(JDA firstBot) { if (!closed) client = firstBot; }
     ChatRelay relay() { return relay; }
@@ -41,6 +47,7 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
         return "Text chat: " + state + "; " + relay.metrics()
             + "\nChat channel: " + config.chat.channelId + "; directions MC→Discord=" + config.chat.minecraftToDiscord + ", Discord→MC=" + config.chat.discordToMinecraft
             + "; Discord events=" + discordEvents.get() + ", channel matches=" + channelMessages.get() + ", ignored bots/webhooks=" + ignoredBotMessages.get()
+            + "\nServer announcement avatar: " + iconState
             + (webhookFailure.isEmpty() ? "" : "\nWebhook setup: " + webhookFailure)
             + (deliveryFailure.isEmpty() ? "" : "\nLast chat delivery failure: " + deliveryFailure);
     }
@@ -70,9 +77,13 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
             ChatRelay.Outgoing message = relay.nextOutgoing();
             if (message == null) return;
             try {
-                if (!message.system() && webhook != null && validWebhookName(message.player())) {
-                    await(webhook.sendMessage(message.webhookText()).setUsername(message.player()).setAvatarUrl(message.avatar())
-                        .setAllowedMentions(List.of()).setSuppressEmbeds(true));
+                if (webhook != null && (message.system() || validWebhookName(message.player()))) {
+                    var action = webhook.sendMessage(message.webhookText())
+                        .setUsername(message.system() ? config.chat.serverName : message.player())
+                        .setAllowedMentions(List.of()).setSuppressEmbeds(true);
+                    // No per-message avatar override for announcements: inherit server-icon.png.
+                    if (!message.system()) action.setAvatarUrl(message.avatar());
+                    await(action);
                 } else {
                     await(channel.sendMessage(message.botText()).setAllowedMentions(List.of()).setSuppressEmbeds(true));
                 }
@@ -82,7 +93,7 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
                 // A timed-out request may already have been delivered. Do not retry the same message and duplicate it.
                 relay.failed();
                 deliveryFailure = ChatFailure.describe(e);
-                if (!message.system() && webhook != null) webhook = null;
+                if (webhook != null) webhook = null;
                 warn("message delivery", e);
             }
         } catch (Exception e) { relay.failed(); deliveryFailure = ChatFailure.describe(e); warn("worker", e); }
@@ -95,10 +106,30 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
                 .filter(w -> w.getType() == WebhookType.INCOMING && WEBHOOK_NAME.equals(w.getName())
                     && w.getOwnerAsUser() != null && current.getSelfUser().getId().equals(w.getOwnerAsUser().getId()))
                 .findFirst().orElse(null);
-            if (webhook == null) webhook = await(channel.createWebhook(WEBHOOK_NAME));
+            Icon icon = loadIcon();
+            if (webhook == null) {
+                var action = channel.createWebhook(WEBHOOK_NAME);
+                if (icon != null) action.setAvatar(icon);
+                webhook = await(action);
+            } else if (icon != null) {
+                try { await(webhook.getManager().setAvatar(icon)); }
+                catch (Exception e) { iconState = "server-icon.png upload failed: " + ChatFailure.describe(e); warn("server icon update", e); }
+            }
             webhookFailure = "";
         } catch (InterruptedException e) { throw e; }
         catch (Exception e) { webhook = null; webhookFailure = ChatFailure.describe(e); warn("webhook setup", e); }
+    }
+
+    private Icon loadIcon() {
+        if (!java.nio.file.Files.isRegularFile(serverIcon)) { iconState = "server-icon.png missing; using webhook default"; return null; }
+        try {
+            if (java.nio.file.Files.size(serverIcon) > 256 * 1024) throw new java.io.IOException("Icon too large");
+            byte[] png = java.nio.file.Files.readAllBytes(serverIcon);
+            if (png.length < 8 || png[0] != (byte) 0x89 || png[1] != 'P' || png[2] != 'N' || png[3] != 'G') throw new java.io.IOException("Not PNG");
+            Icon result = Icon.from(png, Icon.IconType.PNG);
+            iconState = "server-icon.png";
+            return result;
+        } catch (Exception e) { iconState = "server-icon.png unreadable; using webhook default"; warn("server icon load", e); return null; }
     }
 
     private static <T> T await(RestAction<T> action) throws Exception {
@@ -121,5 +152,15 @@ final class ChatBridge extends ListenerAdapter implements AutoCloseable {
         LOG.warn("Text relay {} failed: {}. Check /discordlink status. Message content and credentials are not logged.", operation, ChatFailure.describe(error));
     }
 
-    @Override public void close() { closed = true; relay.close(); worker.shutdownNow(); client = null; }
+    void close(boolean announceStop) {
+        if (closed) return;
+        if (announceStop && relay.lifecycle(false)) {
+            try {
+                // Bound shutdown time and send before VoiceEngine closes the shared Discord client.
+                worker.submit(this::work).get(5, TimeUnit.SECONDS);
+            } catch (Exception e) { warn("server stopped announcement", e); }
+        }
+        closed = true; relay.close(); worker.shutdownNow(); client = null;
+    }
+    @Override public void close() { close(false); }
 }

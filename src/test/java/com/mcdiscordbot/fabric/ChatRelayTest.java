@@ -7,6 +7,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ChatRelayTest {
     private ChatConfig config() { var config = new ChatConfig(); config.enabled = true; config.channelId = "234567890123456789"; return config; }
+    @Test void shutdownNoticeTakesPriorityOverAFullQueueAndLifecycleCanBeDisabled() {
+        var config = config(); var relay = new ChatRelay("guild", config);
+        for (int i = 0; i < ChatRelay.CAPACITY; i++) relay.minecraft(UUID.randomUUID(), "Player", null, "message " + i);
+        assertTrue(relay.lifecycle(false));
+        assertEquals("Server stopped.", relay.nextOutgoing().webhookText());
+        assertTrue(relay.metrics().contains("dropped=1"));
+        config.serverMessages = false;
+        assertFalse(relay.lifecycle(true));
+        config.serverMessages = true; config.minecraftToDiscord = false;
+        assertFalse(relay.lifecycle(false));
+    }
     @Test void offlinePlayerSkinChangesUseANewTextureOnTheNextMessage() {
         var relay = new ChatRelay("guild", config());
         UUID offline = UUID.nameUUIDFromBytes("OfflinePlayer:OfflineUser".getBytes(java.nio.charset.StandardCharsets.UTF_8));

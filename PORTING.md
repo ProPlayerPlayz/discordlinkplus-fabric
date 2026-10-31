@@ -25,6 +25,7 @@ Annotated checkpoints identify the release source snapshots:
 | `fabric-v1.0.2-mc26.3` | Discord member and speaking head; matches deployed Java source | 17 |
 | `fabric-v1.1.0-mc26.3` | Optional text chat, player webhooks, event messages, offline Skin Restorer skins | 31 |
 | `fabric-v1.1.1-mc26.3` | Valid webhook creation name; sanitized failure diagnostics and traffic counters | 35 |
+| `fabric-v1.2.0-mc26.3` | Server-icon webhook announcements and startup/shutdown notices | 39 |
 
 The original version-property maintenance commit keeps the same Java implementation and resolved runtime dependency versions as 1.0.2. Version 1.1.0 adds text chat in separate relay-core, platform-integration, and setup-documentation commits. Release tags are fixed historical checkpoints; do not move them after rebasing.
 
@@ -117,3 +118,5 @@ git fetch upstream
 The published fork is [k1R4/discordlinkplus-fabric](https://github.com/k1R4/discordlinkplus-fabric), on branch `fabric-26.3-voice`. The working clone uses this fork as `origin` and the original repository as `upstream`. Push the Fabric branch and `fabric-*` tags explicitly; the fork's `main` branch is preserved for upstream history. All port commits include `Co-authored-by: Codex <noreply@openai.com>`.
 
 Webhook names must follow [Discord's name restrictions](https://docs.discord.com/developers/resources/webhook#create-webhook), including the reserved `discord` and `clyde` substrings. Version 1.1.1 tests actual new-webhook setup through the JDA adapter instead of assuming an existing webhook. Its diagnostic formatter unwraps asynchronous exceptions and reports Discord error codes without including request URLs, tokens, response bodies, or chat text.
+
+Version 1.2.0 keeps the Discord connection alive until the Minecraft SERVER_STOPPING handler, even if the SVC stopped event arrives first. Startup notices are consumed once per server start; reload-close and actual shutdown are distinct paths. ChatBridge.close(true) gives a priority stop announcement a bounded five-second send before VoiceEngine shuts down JDA. Preserve this ordering when porting. Server icons are read/uploaded on the chat worker; player messages override avatars per message and system messages inherit the webhook default. All 39 automated tests pass; the release has not been deployed automatically.

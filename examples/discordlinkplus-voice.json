@@ -19,6 +19,10 @@
     "discordToMinecraftFormat": "[Discord] %user%: %message%",
     "joinLeaveMessages": true,
     "deathMessages": true,
-    "advancementMessages": true
+    "advancementMessages": true,
+    "serverName": "Minecraft Server",
+    "serverMessages": true,
+    "serverStartedMessage": "Server started.",
+    "serverStoppedMessage": "Server stopped."
   }
 }

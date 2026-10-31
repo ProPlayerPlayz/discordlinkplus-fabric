@@ -23,14 +23,15 @@ public final class DiscordVoiceMod implements ModInitializer {
     private static volatile VoiceEngine engine;
     private static volatile VoicechatServerApi voicechat;
     private static MinecraftServer server;
+    private static volatile boolean stopping, startupNoticePending;
     private static final DiscordRoster roster = new DiscordRoster();
 
     @Override public void onInitialize() {
         ChatEvents.register();
         try { BridgeConfig.load(CONFIG); }
         catch (Exception e) { LOG.error("Cannot load config/discordlinkplus-voice.json; bridge remains disabled."); }
-        ServerLifecycleEvents.SERVER_STARTED.register(s -> { server = s; reload(); });
-        ServerLifecycleEvents.SERVER_STOPPING.register(s -> stop());
+        ServerLifecycleEvents.SERVER_STARTED.register(s -> { server = s; stopping = false; startupNoticePending = true; reload(); });
+        ServerLifecycleEvents.SERVER_STOPPING.register(s -> { stopping = true; stop(true); });
         ServerLifecycleEvents.SERVER_STOPPED.register(s -> { server = null; voicechat = null; roster.clear(); });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             VoiceEngine current = engine;
@@ -67,7 +68,11 @@ public final class DiscordVoiceMod implements ModInitializer {
     public static VoiceEngine engine() { return engine; }
     public static void refreshRoster(UUID player) { roster.refresh(player); }
     public static synchronized void voicechatStarted(VoicechatServerApi api) { voicechat = api; if (server != null) reload(); }
-    public static synchronized void voicechatStopped() { voicechat = null; stop(); }
+    public static synchronized void voicechatStopped() {
+        voicechat = null;
+        // SVC may stop before our SERVER_STOPPING listener. Keep Discord alive for its stop notice.
+        if (server == null) stop();
+    }
 
     private static synchronized void reload() {
         BridgeConfig config;
@@ -77,12 +82,14 @@ public final class DiscordVoiceMod implements ModInitializer {
         if (!config.enabled && !config.chat.enabled) { LOG.info("Discord bridge is disabled in config."); return; }
         if (voicechat == null) { LOG.info("Waiting for Simple Voice Chat server API."); return; }
         engine = new VoiceEngine(config, voicechat, FabricLoader.getInstance().getConfigDir().resolve("discordlinkplus-voice-channels.json"));
+        if (startupNoticePending && engine.serverStarted()) startupNoticePending = false;
         engine.start();
     }
 
-    private static synchronized void stop() {
+    private static synchronized void stop() { stop(false); }
+    private static synchronized void stop(boolean announceStop) {
         VoiceEngine previous = engine;
         engine = null;
-        if (previous != null) previous.close();
+        if (previous != null) previous.close(announceStop);
     }
 }
