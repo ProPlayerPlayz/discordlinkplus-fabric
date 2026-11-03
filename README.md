@@ -1,5 +1,7 @@
 > **Fabric port branch:** This branch builds DiscordLink+ text and voice bridging for Fabric 26.3 / SVC 2.6.27. See [VOICE-PORT.md](VOICE-PORT.md) for setup, [CHAT-SETUP.md](CHAT-SETUP.md) for adding text chat, and [PORTING.md](PORTING.md) for the commit series, build, and rebase workflow. The original Bukkit README follows for provenance.
 
+**Fabric downloads:** [Releases in this fork](https://github.com/ProPlayerPlayz/discordlinkplus-fabric/releases). Download the bundled `DiscordLinkPlus-Voice-...jar` asset into the server's `mods/` directory. Version `1.2.1-rc.1` adds compact Discord attachment labels and is a prerelease pending live Discord testing. See [CHANGELOG.md](CHANGELOG.md) for changes. The Bukkit setup instructions below are retained for upstream provenance; use the Fabric guides linked above.
+
 # DiscordLink+
 
 A **Paper/Bukkit/Folia-compatible** Minecraft plugin that bridges your server with Discord — similar to [DiscordSRV](https://github.com/DiscordSRV/DiscordSRV) — with account linking and **Simple Voice Chat** group bridging.
